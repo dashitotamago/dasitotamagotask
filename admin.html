@@ -141,42 +141,90 @@ function fieldsForKind(kind){
   }
 }
 
+const KIND_LABELS = {
+  simple_calc: "定数と在庫の差分で必要量を計算（さかつ方式）",
+  simple_static: "在庫と定数を比較し、必要量は固定値のまま",
+  threshold: "下限・上限のしきい値で判定（シモジマ・マルト水谷方式）",
+  egg_special: "在庫と定数を比較し、必要量は文字列固定",
+  bread_fixed: "在庫に関わらず毎回定数分を発注（固定発注）"
+};
+
+let itemsDraft = null;
+
+function ensureItemsDraft(){
+  if(!itemsDraft){ itemsDraft = CONFIG.items.map(it=>Object.assign({}, it)); }
+  return itemsDraft;
+}
+function genItemId(){ return 'item_'+Date.now()+'_'+Math.floor(Math.random()*1000); }
+
 function renderItemsTab(){
-  const dayMap = groupByDay(CONFIG.items);
+  const draft = ensureItemsDraft();
+  const dayMap = groupByDay(draft);
   let html = "";
   DAY_ORDER.forEach(day=>{
     const items = dayMap.get(day) || [];
-    if(items.length===0) return;
     const secMap = groupBySection(items);
     html += `<div class="day-group"><div class="day-title">${DAY_LABELS[day]}</div>`;
+    if(secMap.size===0){ html += `<div class="section-block" style="color:#8a8271;font-size:12.5px;">まだ品目がありません</div>`; }
     secMap.forEach((secItems, sectionName)=>{
-      const fields = fieldsForKind(secItems[0].kind);
+      const kind = secItems[0].kind;
+      const fields = fieldsForKind(kind);
       html += `<div class="section-block"><div class="section-title">${sectionName}</div>`;
-      html += `<div class="table-scroll"><table><thead><tr><th>商品名</th>${fields.map(f=>`<th>${f[1]}</th>`).join('')}<th>単位</th></tr></thead><tbody>`;
+      html += `<div class="table-scroll"><table><thead><tr><th>商品名</th>${fields.map(f=>`<th>${f[1]}</th>`).join('')}<th>単位</th><th></th></tr></thead><tbody>`;
       secItems.forEach(item=>{
-        html += `<tr><td class="item-name">${item.itemName}</td>`;
+        html += `<tr><td><input class="unit-input item-name-input" type="text" data-item="${item.itemId}" data-field="itemName" value="${item.itemName||''}" onchange="editItemField('${item.itemId}','itemName',this.value)"></td>`;
         fields.forEach(f=>{
-          html += `<td><input class="const-input" type="number" step="any" data-item="${item.itemId}" data-field="${f[0]}" value="${item[f[0]]!==undefined?item[f[0]]:''}"></td>`;
+          html += `<td><input class="const-input" type="number" step="any" value="${item[f[0]]!==undefined&&item[f[0]]!==''?item[f[0]]:''}" onchange="editItemField('${item.itemId}','${f[0]}', this.value===''?'':parseFloat(this.value))"></td>`;
         });
-        html += `<td><input class="unit-input" type="text" data-item="${item.itemId}" data-field="unit" value="${item.unit||''}"></td></tr>`;
+        html += `<td><input class="unit-input" type="text" value="${item.unit||''}" onchange="editItemField('${item.itemId}','unit', this.value)"></td>`;
+        html += `<td><button class="icon-btn" onclick="removeItem('${item.itemId}')">×</button></td></tr>`;
       });
-      html += `</tbody></table></div></div>`;
+      html += `</tbody></table></div>`;
+      html += `<button class="add-row-btn" onclick="addItemToSection('${day}','${sectionName.replace(/'/g,"\\'")}','${kind}')">＋ 品目を追加</button>`;
+      html += `</div>`;
     });
     html += `</div>`;
   });
+
+  html += `<div class="new-section-form">
+    <select id="newItemSectionDay">${DAY_ORDER.map(d=>`<option value="${d}">${DAY_LABELS[d]}</option>`).join('')}</select>
+    <input type="text" id="newItemSectionTitle" placeholder="新しい発注グループ名（例：新しい仕入れ先）">
+    <select id="newItemSectionKind">${Object.keys(KIND_LABELS).map(k=>`<option value="${k}">${KIND_LABELS[k]}</option>`).join('')}</select>
+    <button class="add-row-btn" onclick="addNewItemSection()">＋ 発注グループを追加</button>
+  </div>`;
   return html;
 }
 
-function collectItemsFromDom(){
-  const updated = CONFIG.items.map(it => Object.assign({}, it));
-  document.querySelectorAll('#app input[data-item]').forEach(input=>{
-    const id = input.dataset.item, field = input.dataset.field;
-    const item = updated.find(i=>i.itemId===id);
-    if(!item) return;
-    if(field==='unit'){ item.unit = input.value; }
-    else { item[field] = input.value===''? '' : parseFloat(input.value); }
+function editItemField(id, field, value){
+  const item = itemsDraft.find(i=>i.itemId===id);
+  if(item) item[field] = value;
+}
+function removeItem(id){
+  itemsDraft = itemsDraft.filter(i=>i.itemId!==id);
+  renderApp();
+}
+function addItemToSection(day, section, kind){
+  const items = itemsDraft.filter(i=>i.day===day && i.section===section);
+  const maxSort = items.reduce((m,i)=>Math.max(m, i.sortOrder||0), 0);
+  itemsDraft.push({
+    itemId: genItemId(), day, section, itemName:"", kind,
+    const:"", low:"", high:"", weekdayBase:"", weekendBase:"",
+    unit:"", staticReq:"", staticPos:"", sortOrder:maxSort+1
   });
-  return updated;
+  renderApp();
+}
+function addNewItemSection(){
+  const day = document.getElementById('newItemSectionDay').value;
+  const title = document.getElementById('newItemSectionTitle').value.trim();
+  const kind = document.getElementById('newItemSectionKind').value;
+  if(!title){ alert('発注グループ名を入力してください'); return; }
+  ensureItemsDraft();
+  itemsDraft.push({
+    itemId: genItemId(), day, section:title, itemName:"", kind,
+    const:"", low:"", high:"", weekdayBase:"", weekendBase:"",
+    unit:"", staticReq:"", staticPos:"", sortOrder:1
+  });
+  renderApp();
 }
 
 /* ---------- チェック項目タブ ---------- */
@@ -274,9 +322,9 @@ async function save(){
   msg.textContent = "保存中…";
   try{
     if(currentTab==='items'){
-      const items = collectItemsFromDom();
-      await fetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'saveItems', items }) });
-      CONFIG.items = items;
+      ensureItemsDraft();
+      await fetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'saveItems', items: itemsDraft }) });
+      CONFIG.items = itemsDraft.map(i=>Object.assign({},i));
     } else {
       await fetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'saveChecklists', checklists: checklistDraft }) });
       CONFIG.checklists = checklistDraft.map(i=>Object.assign({},i));
