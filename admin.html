@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>管理サイト｜曜日別 発注・業務チェック</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@600;700&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#221f1a; --paper:#eeeae2; --card:#ffffff; --line:#cfc9bb;
+    --accent:#2f5d55; --accent-bg:#e2ede9;
+    --danger:#b5432c; --danger-bg:#f4dcd3;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{background:var(--paper);color:var(--ink);font-family:'Zen Kaku Gothic New',sans-serif;padding:20px 14px 80px;}
+  .wrap{max-width:760px;margin:0 auto;}
+  h1{font-family:'Shippori Mincho',serif;font-size:22px;margin:0 0 4px;}
+  .lead{font-size:12.5px;color:#6b6355;margin:0 0 16px;}
+
+  .tabs{display:flex;gap:6px;margin-bottom:16px;border-bottom:2px solid var(--line);}
+  .tabs button{font-family:inherit;font-weight:700;font-size:14px;padding:8px 16px;background:transparent;border:2px solid var(--line);border-bottom:none;border-radius:8px 8px 0 0;color:#7a715f;cursor:pointer;top:2px;position:relative;}
+  .tabs button.active{background:var(--ink);color:var(--paper);border-color:var(--ink);}
+
+  .panel{display:none;}
+  .panel.active{display:block;}
+
+  .day-group{background:var(--card);border:1px solid var(--line);border-radius:10px;margin-bottom:16px;overflow:hidden;}
+  .day-group > .day-title{font-family:'Shippori Mincho',serif;font-size:16px;font-weight:700;padding:12px 14px;background:var(--accent-bg);color:var(--accent);}
+
+  .section-block{padding:12px 14px;border-top:1px solid #ece7dc;}
+  .section-block .section-title{font-weight:700;font-size:13.5px;margin-bottom:8px;}
+
+  table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  thead th{text-align:left;font-size:10.5px;color:#8a8271;padding:4px;border-bottom:1px solid var(--line);white-space:nowrap;}
+  tbody td{padding:5px 4px;white-space:nowrap;}
+  .item-name{font-weight:700;min-width:90px;white-space:normal !important;}
+
+  input.const-input{
+    width:56px;font-family:inherit;font-size:12.5px;text-align:right;
+    padding:5px 6px;border-radius:5px;border:1.5px solid var(--line);background:#fbfaf6;
+  }
+  input.unit-input{width:110px;font-family:inherit;font-size:12px;padding:5px 6px;border-radius:5px;border:1.5px solid var(--line);}
+  input.const-input:focus, input.unit-input:focus{outline:2px solid var(--accent);outline-offset:1px;}
+
+  .table-scroll{overflow-x:auto;}
+
+  .checklist-section{background:var(--card);border:1px solid var(--line);border-radius:10px;margin-bottom:14px;padding:12px 14px;}
+  .checklist-section .head-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+  .checklist-section .head-row .title-input{font-weight:700;font-size:14px;font-family:'Shippori Mincho',serif;border:none;border-bottom:1.5px dashed var(--line);background:transparent;padding:2px 0;flex:1;margin-right:10px;}
+  .checklist-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+  .checklist-row input[type=text]{flex:1;font-family:inherit;font-size:13px;padding:7px 9px;border-radius:6px;border:1.5px solid var(--line);}
+  .icon-btn{border:none;background:var(--danger-bg);color:var(--danger);width:28px;height:28px;border-radius:6px;font-weight:700;cursor:pointer;flex-shrink:0;font-size:15px;line-height:1;}
+  .add-row-btn{margin-top:4px;font-family:inherit;font-size:12.5px;font-weight:700;color:var(--accent);background:var(--accent-bg);border:none;padding:6px 12px;border-radius:6px;cursor:pointer;}
+  .remove-section-btn{font-size:11px;color:var(--danger);background:none;border:none;cursor:pointer;text-decoration:underline;}
+
+  .new-section-form{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--card);border:1px dashed var(--line);border-radius:10px;padding:12px 14px;margin-bottom:20px;}
+  .new-section-form select, .new-section-form input{font-family:inherit;font-size:13px;padding:7px 9px;border-radius:6px;border:1.5px solid var(--line);}
+  .new-section-form input[type=text]{flex:1;min-width:160px;}
+
+  .save-bar{position:sticky;bottom:0;background:var(--paper);padding:12px 0 4px;margin-top:10px;}
+  .save-btn{width:100%;font-family:inherit;font-size:15px;font-weight:700;padding:13px;border:none;border-radius:8px;background:var(--accent);color:#fff;cursor:pointer;}
+  .save-btn:active{opacity:.85;}
+  .status-msg{text-align:center;font-size:12.5px;color:var(--accent);margin-top:6px;min-height:16px;}
+
+  .loading{text-align:center;padding:40px 20px;color:#8a8271;font-size:13.5px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>管理サイト</h1>
+  <p class="lead">発注の定数（発注量の基準となる数字）とチェック項目の一覧を編集します。ここでの変更はスタッフ用サイトにすぐ反映されます。</p>
+
+  <div class="tabs">
+    <button class="active" data-tab="items" onclick="switchTab('items')">発注の定数</button>
+    <button data-tab="checklists" onclick="switchTab('checklists')">チェック項目</button>
+  </div>
+
+  <div id="app"><div class="loading">読み込み中…</div></div>
+</div>
+
+<script>
+/* ここに Code.gs をデプロイしたウェブアプリURLを貼り付けてください */
+const GAS_URL = "GAS_WEB_APP_URL_HERE";
+
+const DAY_LABELS = { mon:"月曜日", tue:"火曜日", wed:"水曜日", thu:"木曜日", fri:"金曜日", sat:"土曜日" };
+const DAY_ORDER = ["mon","tue","wed","thu","fri","sat"];
+
+let CONFIG = { items: [], checklists: [] };
+let currentTab = "items";
+
+async function loadConfig(){
+  try{
+    const res = await fetch(GAS_URL);
+    CONFIG = await res.json();
+    renderApp();
+  }catch(err){
+    document.getElementById('app').innerHTML = '<div class="loading">読み込みに失敗しました。GAS_URLの設定を確認してください。</div>';
+  }
+}
+
+function switchTab(tab){
+  currentTab = tab;
+  document.querySelectorAll('.tabs button').forEach(b=> b.classList.toggle('active', b.dataset.tab===tab));
+  renderApp();
+}
+
+function groupByDay(list){
+  const map = new Map();
+  DAY_ORDER.forEach(d=> map.set(d, []));
+  list.forEach(it=>{ if(!map.has(it.day)) map.set(it.day, []); map.get(it.day).push(it); });
+  return map;
+}
+function groupBySection(list){
+  const map = new Map();
+  list.sort((a,b)=>(a.sortOrder||0)-(b.sortOrder||0));
+  list.forEach(it=>{ if(!map.has(it.section)) map.set(it.section, []); map.get(it.section).push(it); });
+  return map;
+}
+
+/* ---------- 発注の定数タブ ---------- */
+
+function fieldsForKind(kind){
+  switch(kind){
+    case 'bread_first':
+    case 'bread_second':
+    case 'bread_fixed':
+    case 'simple_calc':
+      return [["const","定数"]];
+    case 'simple_static':
+      return [["const","定数"],["staticReq","発注必要量(固定)"]];
+    case 'egg_special':
+      return [["const","定数"]];
+    case 'threshold':
+      return [["low","下限定数"],["high","上限定数"],["staticReq","必要量(固定・任意)"],["staticPos","可能量(固定・任意)"]];
+    case 'milk_tue':
+    case 'milk_thu':
+      return [["weekdayBase","平日あたり"],["weekendBase","休日あたり"]];
+    default: return [];
+  }
+}
+
+function renderItemsTab(){
+  const dayMap = groupByDay(CONFIG.items);
+  let html = "";
+  DAY_ORDER.forEach(day=>{
+    const items = dayMap.get(day) || [];
+    if(items.length===0) return;
+    const secMap = groupBySection(items);
+    html += `<div class="day-group"><div class="day-title">${DAY_LABELS[day]}</div>`;
+    secMap.forEach((secItems, sectionName)=>{
+      const fields = fieldsForKind(secItems[0].kind);
+      html += `<div class="section-block"><div class="section-title">${sectionName}</div>`;
+      html += `<div class="table-scroll"><table><thead><tr><th>商品名</th>${fields.map(f=>`<th>${f[1]}</th>`).join('')}<th>単位</th></tr></thead><tbody>`;
+      secItems.forEach(item=>{
+        html += `<tr><td class="item-name">${item.itemName}</td>`;
+        fields.forEach(f=>{
+          html += `<td><input class="const-input" type="number" step="any" data-item="${item.itemId}" data-field="${f[0]}" value="${item[f[0]]!==undefined?item[f[0]]:''}"></td>`;
+        });
+        html += `<td><input class="unit-input" type="text" data-item="${item.itemId}" data-field="unit" value="${item.unit||''}"></td></tr>`;
+      });
+      html += `</tbody></table></div></div>`;
+    });
+    html += `</div>`;
+  });
+  return html;
+}
+
+function collectItemsFromDom(){
+  const updated = CONFIG.items.map(it => Object.assign({}, it));
+  document.querySelectorAll('#app input[data-item]').forEach(input=>{
+    const id = input.dataset.item, field = input.dataset.field;
+    const item = updated.find(i=>i.itemId===id);
+    if(!item) return;
+    if(field==='unit'){ item.unit = input.value; }
+    else { item[field] = input.value===''? '' : parseFloat(input.value); }
+  });
+  return updated;
+}
+
+/* ---------- チェック項目タブ ---------- */
+
+let checklistDraft = null; // 編集中のコピー
+
+function ensureDraft(){
+  if(!checklistDraft){
+    checklistDraft = CONFIG.checklists.map(it=>Object.assign({}, it));
+  }
+  return checklistDraft;
+}
+
+function renderChecklistsTab(){
+  const draft = ensureDraft();
+  const dayMap = groupByDay(draft);
+  let html = "";
+  DAY_ORDER.forEach(day=>{
+    const items = dayMap.get(day) || [];
+    const secMap = groupBySection(items);
+    html += `<div class="day-group"><div class="day-title">${DAY_LABELS[day]}</div><div class="section-block">`;
+    if(secMap.size===0){ html += `<div style="color:#8a8271;font-size:12.5px;">まだ項目がありません</div>`; }
+    secMap.forEach((secItems, sectionName)=>{
+      html += `<div class="checklist-section" data-day="${day}" data-section="${sectionName}">
+        <div class="head-row">
+          <input class="title-input" type="text" value="${sectionName}" onchange="renameSection('${day}','${sectionName}',this.value)">
+          <button class="remove-section-btn" onclick="removeSection('${day}','${sectionName}')">この項目グループを削除</button>
+        </div>`;
+      secItems.forEach(it=>{
+        html += `<div class="checklist-row">
+          <input type="text" value="${it.itemText}" onchange="editChecklistText('${it.checklistId}', this.value)">
+          <button class="icon-btn" onclick="removeChecklistItem('${it.checklistId}')">×</button>
+        </div>`;
+      });
+      html += `<button class="add-row-btn" onclick="addChecklistItem('${day}','${sectionName}')">＋ 項目を追加</button></div>`;
+    });
+    html += `</div></div>`;
+  });
+
+  html += `<div class="new-section-form">
+    <select id="newSectionDay">${DAY_ORDER.map(d=>`<option value="${d}">${DAY_LABELS[d]}</option>`).join('')}</select>
+    <input type="text" id="newSectionTitle" placeholder="新しいチェック項目グループ名（例：レジ締め）">
+    <button class="add-row-btn" onclick="addSection()">＋ グループを追加</button>
+  </div>`;
+  return html;
+}
+
+function editChecklistText(id, value){
+  const it = checklistDraft.find(i=>i.checklistId===id);
+  if(it) it.itemText = value;
+}
+function removeChecklistItem(id){
+  checklistDraft = checklistDraft.filter(i=>i.checklistId!==id);
+  renderApp();
+}
+function addChecklistItem(day, section){
+  const items = checklistDraft.filter(i=>i.day===day && i.section===section);
+  const maxSort = items.reduce((m,i)=>Math.max(m, i.sortOrder||0), 0);
+  checklistDraft.push({
+    checklistId: 'cl_'+Date.now()+'_'+Math.floor(Math.random()*1000),
+    day, section, itemText: "", sortOrder: maxSort+1
+  });
+  renderApp();
+}
+function removeSection(day, section){
+  if(!confirm(`「${section}」のチェック項目グループを削除しますか？`)) return;
+  checklistDraft = checklistDraft.filter(i=>!(i.day===day && i.section===section));
+  renderApp();
+}
+function renameSection(day, oldName, newName){
+  if(!newName || newName===oldName) return;
+  checklistDraft.forEach(i=>{ if(i.day===day && i.section===oldName) i.section = newName; });
+  renderApp();
+}
+function addSection(){
+  const day = document.getElementById('newSectionDay').value;
+  const title = document.getElementById('newSectionTitle').value.trim();
+  if(!title){ alert('グループ名を入力してください'); return; }
+  ensureDraft();
+  checklistDraft.push({ checklistId:'cl_'+Date.now(), day, section:title, itemText:"新しい項目", sortOrder:1 });
+  renderApp();
+}
+
+/* ---------- 描画・保存 ---------- */
+
+function renderApp(){
+  const app = document.getElementById('app');
+  let inner = currentTab==='items' ? renderItemsTab() : renderChecklistsTab();
+  inner += `<div class="save-bar"><button class="save-btn" onclick="save()">保存する</button><div class="status-msg" id="statusMsg"></div></div>`;
+  app.innerHTML = inner;
+}
+
+async function save(){
+  const msg = document.getElementById('statusMsg');
+  msg.textContent = "保存中…";
+  try{
+    if(currentTab==='items'){
+      const items = collectItemsFromDom();
+      await fetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'saveItems', items }) });
+      CONFIG.items = items;
+    } else {
+      await fetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'saveChecklists', checklists: checklistDraft }) });
+      CONFIG.checklists = checklistDraft.map(i=>Object.assign({},i));
+    }
+    msg.textContent = "保存しました";
+  }catch(err){
+    msg.textContent = "保存に失敗しました";
+  }
+}
+
+loadConfig();
+</script>
+</body>
+</html>

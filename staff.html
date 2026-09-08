@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>曜日別 発注・業務チェック</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@600;700&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#221f1a; --paper:#efe9dc; --card:#faf7ef; --line:#c9bfa4;
+    --order:#b5432c; --order-bg:#f4dcd3;
+    --maybe:#a4791f; --maybe-bg:#f0e4c4;
+    --no:#5c6b57; --no-bg:#dde3d5;
+    --input-bg:#dff3f2; --input-border:#7fb8b4;
+    --calc-bg:#f3ddd2; --calc-border:#d9a98f;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper); color:var(--ink);
+    font-family:'Zen Kaku Gothic New', sans-serif;
+    padding:20px 14px 60px; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:640px;margin:0 auto;}
+  h1{font-family:'Shippori Mincho',serif;font-size:23px;margin:0 0 4px;}
+  .lead{font-size:12.5px;color:#6b6355;margin:0 0 14px;}
+
+  nav.days{display:flex;gap:6px;overflow-x:auto;padding:2px 2px 12px;border-bottom:2px solid var(--line);-webkit-overflow-scrolling:touch;}
+  nav.days::-webkit-scrollbar{display:none;}
+  nav.days button{flex:0 0 auto;font-family:inherit;font-weight:700;font-size:14px;padding:8px 15px;background:transparent;border:2px solid var(--line);border-bottom:none;border-radius:8px 8px 0 0;color:#7a715f;cursor:pointer;position:relative;top:2px;}
+  nav.days button.active{background:var(--ink);color:var(--paper);border-color:var(--ink);}
+
+  .day-panel{display:none;padding-top:16px;}
+  .day-panel.active{display:block;}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;margin-bottom:14px;overflow:hidden;}
+  .card-head{padding:12px 14px 8px;border-bottom:1px dashed var(--line);}
+  .card-head h2{font-family:'Shippori Mincho',serif;font-size:16px;margin:0 0 3px;}
+  .card-head .meta{font-size:11px;color:#8a8271;}
+
+  .section-inputs{display:flex;flex-wrap:wrap;gap:8px 16px;padding:10px 14px 2px;}
+  .section-inputs label{font-size:11px;color:#5b5346;display:flex;flex-direction:column;gap:4px;}
+
+  table{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px;}
+  thead th{text-align:left;font-weight:700;font-size:10.5px;color:#8a8271;padding:6px 5px;border-bottom:1px solid var(--line);white-space:nowrap;}
+  tbody td{padding:9px 5px;border-bottom:1px solid #ece5d4;white-space:nowrap;}
+  tbody tr:last-child td{border-bottom:none;}
+  .item-name{font-weight:700;white-space:normal !important;min-width:88px;}
+  .unit-cell{font-size:11.5px;color:#8a8271;}
+
+  .badge{display:inline-block;font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap;}
+  .badge.order{background:var(--order-bg);color:var(--order);}
+  .badge.maybe{background:var(--maybe-bg);color:var(--maybe);}
+  .badge.no{background:var(--no-bg);color:var(--no);}
+
+  input.cell-input{width:58px;font-family:inherit;font-size:13px;text-align:right;padding:6px 6px;border-radius:6px;border:1.5px solid var(--input-border);background:var(--input-bg);color:var(--ink);}
+  input.cell-input:focus{outline:2px solid var(--input-border);outline-offset:1px;}
+
+  .calc-chip{display:inline-block;min-width:32px;text-align:center;padding:4px 8px;border-radius:6px;background:var(--calc-bg);border:1.5px solid var(--calc-border);font-weight:700;color:#8a4a30;}
+
+  .table-scroll{overflow-x:auto;padding:0 14px 12px;}
+  .table-scroll table{min-width:0;}
+
+  ul.checklist{list-style:none;margin:0;padding:4px 14px 14px;}
+  ul.checklist li{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid #ece5d4;font-size:13.5px;line-height:1.5;}
+  ul.checklist li:last-child{border-bottom:none;}
+  ul.checklist li input[type=checkbox]{appearance:none;width:18px;height:18px;flex-shrink:0;border:2px solid var(--line);border-radius:4px;margin-top:1px;cursor:pointer;position:relative;}
+  ul.checklist li input[type=checkbox]:checked{background:var(--ink);border-color:var(--ink);}
+  ul.checklist li input[type=checkbox]:checked::after{content:'';position:absolute;left:5px;top:1px;width:4px;height:9px;border:solid var(--paper);border-width:0 2px 2px 0;transform:rotate(45deg);}
+  ul.checklist li.checked span{text-decoration:line-through;color:#a39c8a;}
+
+  .loading, .error{text-align:center;padding:40px 20px;color:#8a8271;font-size:13.5px;}
+  footer{text-align:center;font-size:11px;color:#9a917c;margin-top:24px;line-height:1.7;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>曜日別 発注・業務チェック</h1>
+  <p class="lead">在庫量を入力すると発注要否・発注必要量が自動で表示されます。</p>
+  <div id="app"><div class="loading">読み込み中…</div></div>
+  <footer>入力値はこの画面を開いている間だけ保持されます。発注・入金の報告は必ずLINEへ送信してください。</footer>
+</div>
+
+<script>
+/* ここに Code.gs をデプロイしたウェブアプリURLを貼り付けてください */
+const GAS_URL = "GAS_WEB_APP_URL_HERE";
+
+const DAY_LABELS = { mon:"月曜日", tue:"火曜日", wed:"水曜日", thu:"木曜日", fri:"金曜日", sat:"土曜日" };
+const DAY_ORDER = ["mon","tue","wed","thu","fri","sat"];
+
+// セクションごとの発注方法・報告方法（定数ではないため管理サイトの対象外）
+const SECTION_INFO = {
+  "パン水曜納品": { method:"LINEにて発注", report:"LINE画面を報告LINEに送る" },
+  "パン金曜納品": { method:"LINEにて発注", report:"LINE画面を報告LINEに送る" },
+  "パン月曜納品": { method:"LINEにて発注", report:"LINE画面を報告LINEに送る" },
+  "さかつ": { method:"LINEにて発注", report:"LINEの履歴画面を報告LINEに送る" },
+  "牛乳金曜納品": { method:"LINEにて発注", report:"LINE画面と天気予報を報告LINEに送る" },
+  "牛乳月曜納品": { method:"メールにて発注", report:"メール画面と天気予報を報告LINEに送る" },
+  "シモジマ": { method:"シモジマアプリにて発注", report:"アプリ画面を報告LINEに送る" },
+  "マルト水谷": { method:"マルトアプリにて発注", report:"アプリ画面を報告LINEに送る" },
+  "スタッフLINE発注": { method:"スタッフLINEグループへ", report:"" },
+  "卵土曜納品": { method:"LINEにて発注", report:"LINE画面を報告LINEに送る" },
+  "入金時ミニストップ購入": { method:"", report:"" }
+};
+
+let CONFIG = { items: [], checklists: [] };
+const EPHEMERAL = {}; // 在庫・雨天日などの入力値（セッション中のみ）
+
+async function loadConfig(){
+  try{
+    const res = await fetch(GAS_URL);
+    CONFIG = await res.json();
+    render();
+  }catch(err){
+    document.getElementById('app').innerHTML = '<div class="error">データを読み込めませんでした。管理者にGAS_URLの設定を確認してください。</div>';
+  }
+}
+
+function sections(day){
+  const items = CONFIG.items.filter(it=>it.day===day).sort((a,b)=>(a.sortOrder||0)-(b.sortOrder||0));
+  const map = new Map();
+  items.forEach(it=>{ if(!map.has(it.section)) map.set(it.section, []); map.get(it.section).push(it); });
+  return map;
+}
+function checklistSections(day){
+  const items = CONFIG.checklists.filter(it=>it.day===day).sort((a,b)=>(a.sortOrder||0)-(b.sortOrder||0));
+  const map = new Map();
+  items.forEach(it=>{ if(!map.has(it.section)) map.set(it.section, []); map.get(it.section).push(it); });
+  return map;
+}
+
+function ekey(id, field){ return id+"__"+field; }
+function getVal(id, field, def){
+  const k = ekey(id,field);
+  return EPHEMERAL[k] !== undefined ? EPHEMERAL[k] : def;
+}
+function setVal(id, field, v){ EPHEMERAL[ekey(id,field)] = v; }
+
+function findByDaySection(day, section){
+  return CONFIG.items.filter(it=>it.day===day && it.section===section);
+}
+function findMilkTueRequired(itemName){
+  const it = CONFIG.items.find(i=>i.kind==='milk_tue' && i.itemName===itemName);
+  if(!it) return 0;
+  return calcMilkTue(it).required;
+}
+function calcBreadFirstRequired(){
+  const it = CONFIG.items.find(i=>i.kind==='bread_first');
+  if(!it) return 0;
+  return calcBreadFirst(it).required;
+}
+
+function calcBreadFirst(item){
+  const stock = getVal(item.itemId,'stock',0);
+  const diff = item.const - stock;
+  let required = diff<=0?0:(diff>=1?3:diff);
+  return { status: stock>=item.const?'発注不可':'発注', required, stock };
+}
+function calcBreadSecond(item){
+  const stock = getVal(item.itemId,'stock',0);
+  const dep = calcBreadFirstRequired();
+  const diff = item.const - stock - dep;
+  let required = diff<=0?0:(diff<=3?3:diff);
+  return { status: stock>=item.const?'発注不可':'発注', required, stock };
+}
+function calcSimpleCalc(item){
+  const stock = getVal(item.itemId,'stock',0);
+  return { status: stock>=item.const?'発注不可':'発注', required: Math.max(0,item.const-stock), stock };
+}
+function calcSimpleStatic(item){
+  const stock = getVal(item.itemId,'stock',0);
+  return { status: stock>=item.const?'発注不可':'発注', required: item.staticReq, stock };
+}
+function calcEgg(item){
+  const stock = getVal(item.itemId,'stock',0);
+  return { status: stock>=item.const?'発注不可':'発注', required: "1箱", stock };
+}
+function calcThreshold(item){
+  const stock = getVal(item.itemId,'stock',0);
+  let status;
+  if(stock < item.low) status='発注';
+  else if(stock <= item.high) status='発注可能';
+  else status='発注不可';
+  let required, possible;
+  if(item.staticReq !== "" && item.staticReq !== undefined && item.staticReq !== null){
+    required = item.staticReq; possible = item.staticPos;
+  } else {
+    required = Math.max(0, item.low - stock); possible = Math.max(0, item.high - stock);
+  }
+  return { status, required, possible, stock };
+}
+function calcMilkTue(item){
+  const stock = getVal(item.itemId,'stock',0);
+  const rainWeekday = getVal('tue_shared','rainWeekday',0);
+  const rainWeekend = getVal('tue_shared','rainWeekend',0);
+  const holiday = getVal('tue_shared','holiday',0);
+  const cnst = item.weekdayBase*3 + item.weekendBase*2;
+  const required = Math.max(item.weekendBase, cnst - stock - item.weekdayBase*rainWeekday - item.weekendBase*rainWeekend + holiday*(item.weekendBase-item.weekdayBase));
+  const raw = stock>=cnst ? '発注不可' : '発注';
+  return { status: raw==='発注不可' ? '発注不要' : '発注', required, stock, const:cnst };
+}
+function calcMilkThu(item){
+  const stock = getVal(item.itemId,'stock',0);
+  const rainWeekday = getVal('thu_shared','rainWeekday',0);
+  const rainWeekend = getVal('thu_shared','rainWeekend',0);
+  const holiday = getVal('thu_shared','holiday',0);
+  const tueRequired = findMilkTueRequired(item.itemName);
+  const cnst = item.weekdayBase*5 + item.weekendBase*2;
+  const required = Math.max(item.weekdayBase, cnst - stock - item.weekdayBase*rainWeekday - item.weekendBase*rainWeekend + holiday*(item.weekendBase-item.weekdayBase) - tueRequired);
+  const raw = stock>=cnst ? '発注不可' : '発注';
+  return { status: raw==='発注不可' ? '発注不要' : '発注', required, stock, const:cnst };
+}
+
+function calcItem(item){
+  switch(item.kind){
+    case 'bread_first': return calcBreadFirst(item);
+    case 'bread_second': return calcBreadSecond(item);
+    case 'bread_fixed': return { status:'発注', required:item.const, stock:null };
+    case 'simple_calc': return calcSimpleCalc(item);
+    case 'simple_static': return calcSimpleStatic(item);
+    case 'egg_special': return calcEgg(item);
+    case 'threshold': return calcThreshold(item);
+    case 'milk_tue': return calcMilkTue(item);
+    case 'milk_thu': return calcMilkThu(item);
+    default: return { status:'-', required:'-' };
+  }
+}
+
+function badgeClass(v){
+  if(v.indexOf('不可')>-1 || v.indexOf('不要')>-1) return 'no';
+  if(v.indexOf('可能')>-1) return 'maybe';
+  return 'order';
+}
+function badgeHtml(v){ return `<span class="badge ${badgeClass(v)}">${v}</span>`; }
+function chipHtml(v){ return `<span class="calc-chip">${v}</span>`; }
+function inputHtml(id, field, value, step){
+  return `<input class="cell-input" type="number" step="${step||'any'}" min="0" value="${value===null||value===undefined?'':value}" oninput="onInput('${id}','${field}',this.value)">`;
+}
+
+function onInput(id, field, value){
+  const v = parseFloat(value);
+  setVal(id, field, isNaN(v)?0:v);
+  render(getActiveDay());
+}
+
+function getActiveDay(){
+  const activeBtn = document.querySelector('nav.days button.active');
+  return activeBtn ? activeBtn.dataset.key : DAY_ORDER[0];
+}
+
+function renderSectionTable(day, sectionName, items){
+  const info = SECTION_INFO[sectionName] || {};
+  const isThreshold = items[0] && items[0].kind==='threshold';
+  const isMilk = items[0] && (items[0].kind==='milk_tue' || items[0].kind==='milk_thu');
+  const noStockKinds = ['bread_fixed'];
+
+  let html = `<div class="card"><div class="card-head"><h2>${sectionName}</h2>`;
+  if(info.method || info.report){
+    html += `<div class="meta">${info.method||''}${info.method&&info.report?' ／ 報告：':''}${info.report||''}</div>`;
+  }
+  html += `</div>`;
+
+  if(isMilk){
+    const sharedKey = day==='tue' ? 'tue_shared' : 'thu_shared';
+    html += `<div class="section-inputs">
+      <label>平日雨天日 ${inputHtml(sharedKey,'rainWeekday', getVal(sharedKey,'rainWeekday',0), 1)}</label>
+      <label>休日雨天日 ${inputHtml(sharedKey,'rainWeekend', getVal(sharedKey,'rainWeekend',0), 1)}</label>
+      <label>祝日 ${inputHtml(sharedKey,'holiday', getVal(sharedKey,'holiday',0), 1)}</label>
+    </div>`;
+  }
+
+  const cols = ["商品名","発注可否","発注必要量"];
+  if(isThreshold) cols.push("発注可能量");
+  if(!noStockKinds.includes(items[0].kind) && items[0].kind!=='bread_fixed') cols.push("在庫量");
+  cols.push("単位");
+
+  html += `<div class="table-scroll"><table><thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>`;
+  items.forEach(item=>{
+    const r = calcItem(item);
+    html += `<tr><td class="item-name">${item.itemName}</td><td>${badgeHtml(r.status)}</td><td>${chipHtml(r.required)}</td>`;
+    if(isThreshold) html += `<td>${chipHtml(r.possible)}</td>`;
+    if(item.kind!=='bread_fixed') html += `<td>${inputHtml(item.itemId,'stock', getVal(item.itemId,'stock',0), item.kind==='threshold'?0.1:1)}</td>`;
+    html += `<td class="unit-cell">${item.unit||''}</td></tr>`;
+  });
+  html += `</tbody></table></div></div>`;
+  return html;
+}
+
+function renderChecklistCard(sectionName, items){
+  let html = `<div class="card"><div class="card-head"><h2>${sectionName}</h2></div><ul class="checklist">`;
+  items.forEach(it=>{
+    html += `<li><input type="checkbox" onchange="this.closest('li').classList.toggle('checked', this.checked)"><span>${it.itemText}</span></li>`;
+  });
+  html += `</ul></div>`;
+  return html;
+}
+
+function render(activeDay){
+  const app = document.getElementById('app');
+  const current = activeDay || getActiveDay() || DAY_ORDER[0];
+
+  let nav = `<nav class="days">`;
+  DAY_ORDER.forEach(d=>{
+    nav += `<button class="${d===current?'active':''}" data-key="${d}" onclick="render('${d}')">${DAY_LABELS[d]}</button>`;
+  });
+  nav += `</nav>`;
+
+  let panel = `<div class="day-panel active">`;
+  const secMap = sections(current);
+  const clMap = checklistSections(current);
+  secMap.forEach((items, sectionName)=>{
+    panel += renderSectionTable(current, sectionName, items);
+  });
+  clMap.forEach((items, sectionName)=>{
+    panel += renderChecklistCard(sectionName, items);
+  });
+  if(secMap.size===0 && clMap.size===0){
+    panel += `<div class="loading">この曜日にはまだ項目がありません。</div>`;
+  }
+  panel += `</div>`;
+
+  app.innerHTML = nav + panel;
+}
+
+loadConfig();
+</script>
+</body>
+</html>
